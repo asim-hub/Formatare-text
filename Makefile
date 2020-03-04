@@ -1,11 +1,24 @@
-build: tema1
+CC = gcc
+CFLAGS = -g -Wall
+HEADERS = 
+OBJECTS = tema2.o
+EXEC = format_text
 
+.PHONY = default build clean
 
-tema1: tema1.c
-	gcc tema1.c -Wall -Wextra -lm -o tema1
+default: build
 
-run:
-	./tema1
+build: format_text
+
+%.o: %.c $(HEADERS)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(EXEC): $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@
+
+run: build
+	./$(EXEC) ${ARGS}
 
 clean:
-	rm -f tema1
+	-rm -f $(OBJECTS)
+	-rm -f $(EXEC)

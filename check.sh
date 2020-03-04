@@ -1,79 +1,148 @@
 #!/bin/bash
 
-num_points=90
-num_tests=18
-points_per_test=$((num_points/num_tests))
-EXE=tema1
-TESTING=checker
 TOTAL=0
+PROGRAM="./format_text"
+TMP_OUTPUT_FILE="out.txt"
+TMP_OUTPUT="output"
+TIMEOUT_T=5
+LOG="/dev/null"
 
-if [ ! -f 'README' ] && [ ! -f 'Readme' ] \
-    && [ ! -f 'README.md' ] && [ ! -f 'Readme.md' ] \
-    && [ ! -f 'README.txt' ] && [ ! -f 'Readme.txt' ]; then
-    echo "README file not found!"
-fi
+PROBLEM_NAME=("wrap" "center" "align_left" "align_right" "justify" "paragraphs" "lists" "ordered_lists" "combined" "errors")
+NUM_TESTS=(6 5 5 5 5 5 5 5 9 15)
+SCORE=(30 5 5 5 30 5 10 20 45 15)
+NUM_PROBLEMS=10
+MAX_SCORE=170
+MAX_SCORE_NO_BONUS=140
 
-make clean &>/dev/null
-if [ $? -ne 0 ]; then
-    echo "clean rule not found!"
-    # exit 1
-fi
+ERR_MSG=("Cannot wrap!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Invalid operation!"
+         "Too many operations! Only the first 10 will be applied.")
 
-make build &>/dev/null
-if [ $? -ne 0 ]; then
-    echo "build rule failed!"
-    exit 1
-fi
+MESSAGE="msg"        
+touch $MESSAGE
 
-function check_task() {
-    # @params: TASK_ID
-    INPUT=in
-    OUTPUT=out
-    REF=ref
+make build &> $LOG
 
-    if [ ! -f $1 ]; then
-        echo "Executable file $1 was not generated!"
-        exit 1
-    fi
-
+function print_header {
+    echo "=================== Format text ==================="
     echo
-
-    for i in $(ls -v $INPUT); do
-        IN_FILE=$INPUT/$i
-        OUT_FILE=$OUTPUT/$(basename $i .in).out
-        REF_FILE=$REF/$(basename $i .in).ref
-        TEST_NR=$(echo $i | sed "s/test//" | sed "s/.in//")
-
-        ./$1 < $IN_FILE > $OUT_FILE
-
-        # diff will ignore all white spaces when comparing lines
-        diff -Bbw $OUT_FILE $REF_FILE &> /dev/null
-        if [ $? -eq 0 ]; then
-            TOTAL=$((TOTAL + points_per_test))
-            echo -e "Test $TEST_NR: passed ........................ "$points_per_test"/90"
-        else
-            echo -e "Test $TEST_NR: failed ........................ 0/90"
-        fi
-        # exit
-    done
 }
 
 
-echo -e "\n================== TetriBit =================="
+function print_total {
+    echo "==================================================="
+    SCORE_MSG="TOTAL: $TOTAL/$MAX_SCORE"
+    SPACE_COUNT=$(((50 - ${#SCORE_MSG}) / 2))
+    printf ' %.0s' $(seq 1 $SPACE_COUNT)
+    echo $SCORE_MSG
+    if [ $TOTAL = $MAX_SCORE ]; then
+    	echo
+    	echo '        ,-.                     .       . '
+		echo '       /                        |       | '
+		echo '       |    ,-. ;-. ,-: ;-. ,-: |-  ,-. | '
+		echo '       \    | | | | | | |   | | |   `-.   '
+		echo '        `-'"'"' `-'"'"' '"'"' '"'"' `-| '"'"'   `-` `-'"'"' `-'"'"' o  '
+		echo '                    `-'"'"'                   '
+	elif [[ $TOTAL -ge $MAX_SCORE_NO_BONUS ]]; then
+	    echo "                   Almost there!"
+	fi
+    echo "==================================================="
+}
 
-mkdir -p out
+function print_pass {
+    TEST_NR="$1"
+    NAME=${PROBLEM_NAME[$2]}
+    PROB_SCORE=${SCORE[$2]}
+    TEST_SCORE=$((PROB_SCORE / NUM_TESTS[$2]))
+    TEST_NAME="$NAME - test$1"
+    DOT_COUNT=$((40 - ${#TEST_NAME}))
 
-check_task $EXE
+    printf "$TEST_NAME"
+    printf '.%.0s' $(seq 1 $DOT_COUNT)
+    echo "PASSED $TEST_SCORE/$PROB_SCORE"
+    TOTAL=$((TOTAL + TEST_SCORE))
+}
 
-echo -e "\n=============================================="
-echo "TOTAL: "$TOTAL"/90"
-if [ $TOTAL -eq 90 ]; then
-    echo "Congrats!"
+
+function print_failed {
+    TEST_NR="$1"
+    NAME=${PROBLEM_NAME[$2]}
+    PROB_SCORE=${SCORE[$2]}
+    TEST_NAME="$NAME - test$1"
+    DOT_COUNT=$((40 - ${#TEST_NAME}))
+
+    printf "$TEST_NAME"
+    printf '.%.0s' $(seq 1 $DOT_COUNT)
+    echo "FAILED 0/$PROB_SCORE"
+}
+
+
+function verify_test {
+    TEST_NR="$1"
+    NAME=${PROBLEM_NAME[$2]}
+    TEST_INPUT_PATH="$NAME/$NAME$1.in"
+    TEST_OUTPUT_PATH="$NAME/$NAME$1.ok"
+    COMMAND=$(cat "$NAME/$NAME$1.cmd")
+
+    timeout $TIMEOUT_T $PROGRAM "$COMMAND" $TEST_INPUT_PATH $TMP_OUTPUT_FILE > $TMP_OUTPUT
+    ok=1
+
+    if [ $NAME = "errors" ]; then
+        echo ${ERR_MSG[$TEST_NR]} > $MESSAGE
+    fi
+
+    diff "$TMP_OUTPUT" "$MESSAGE" &> $LOG
+    if [ $? -ne 0 ]; then
+        ok=0
+    fi
+
+    if [ $NAME = "justify" ]; then
+        justify/check "$COMMAND" $TMP_OUTPUT_FILE $TEST_INPUT_PATH &> $LOG
+    else
+        diff "$TEST_OUTPUT_PATH" "$TMP_OUTPUT_FILE" &> $LOG
+    fi
+
+    if [ $? -ne 0 ]; then
+        ok=0
+    fi
+
+    if [ $ok -eq 1 ]; then
+        print_pass "$TEST_NR" "$2"
+    else
+        print_failed "$TEST_NR" "$2"
+    fi
+
+    rm -f "$TMP_OUTPUT"
+    rm -f "$TMP_OUTPUT_FILE"
+}
+
+if [ $# -ne 0 ]; then
+    echo "Usage: bash checker.sh"
+    exit 1
 fi
-echo "=============================================="
 
+print_header
 
-echo -e "\nRemember: For the remaining 10% of the grade you need to include"
-echo -e "\tan informative Readme file and and have a consistent coding style."
+for problem in $(seq 0 $((NUM_PROBLEMS - 1))); do
+    for nr in $(seq 0 $((NUM_TESTS[$problem] - 1))); do
+        verify_test "$nr" "$problem"
+    done
+    echo
+done
 
-# rm -rf out
+print_total
+rm -f "$INVALID_OPERATION" "$MESSAGE"
+
+make clean &> $LOG
